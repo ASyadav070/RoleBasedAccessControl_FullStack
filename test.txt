@@ -1,0 +1,4 @@
+Login credentials:
+Admin: username=admin, password=admin123
+Editor: username=editor, password=editor123
+Viewer: username=viewer, password=viewer123
