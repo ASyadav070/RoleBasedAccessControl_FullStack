@@ -1,9 +1,18 @@
 import axios from 'axios';
 
+// Get API base URL from environment variable or default to localhost
+const getApiBaseURL = () => {
+  // Vite exposes env vars prefixed with VITE_
+  return import.meta.env.VITE_API_URL || 'http://localhost:5001';
+};
+
 // Create axios instance with base configuration
 const api = axios.create({
-  baseURL: 'http://localhost:5001',
-  withCredentials: true, // F-V2-API-03: Enable sending cookies
+  baseURL: getApiBaseURL(),
+  withCredentials: true,
+  headers: {
+    'Content-Type': 'application/json',
+  },
 });
 
 let authContextSetToken = null;
@@ -35,25 +44,25 @@ export const setAuthToken = (token) => {
   }
 };
 
-// Response interceptor for automatic token refresh (F-V2-AUTH-05)
+// Response interceptor for automatic token refresh
 api.interceptors.response.use(
-  (response) => {
-    // If response is successful, just return it
-    return response;
-  },
+  (response) => response,
   async (error) => {
     const originalRequest = error.config;
 
-    // CRITICAL: Don't try to refresh if the failed request was the refresh endpoint itself
-    // This prevents an infinite loop
-    if (originalRequest.url === '/api/auth/refresh' || originalRequest.url === '/api/auth/login') {
+    // Don't retry refresh or login endpoints to prevent infinite loops
+    if (
+      originalRequest.url === '/api/auth/refresh' || 
+      originalRequest.url === '/api/auth/login' ||
+      originalRequest._retry
+    ) {
       return Promise.reject(error);
     }
 
     // Check if error is 401 and we haven't already tried to refresh
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401) {
       if (isRefreshing) {
-        // If already refreshing, queue this request
+        // Queue this request while refresh is in progress
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
         })
@@ -61,16 +70,14 @@ api.interceptors.response.use(
             originalRequest.headers['Authorization'] = `Bearer ${token}`;
             return api(originalRequest);
           })
-          .catch(err => {
-            return Promise.reject(err);
-          });
+          .catch(err => Promise.reject(err));
       }
 
       originalRequest._retry = true;
       isRefreshing = true;
 
       try {
-        // F-V2-AUTH-05: Attempt to refresh the access token
+        // Attempt to refresh the access token
         const response = await api.post('/api/auth/refresh');
         const { accessToken, user } = response.data;
 
@@ -89,14 +96,10 @@ api.interceptors.response.use(
         originalRequest.headers['Authorization'] = `Bearer ${accessToken}`;
         return api(originalRequest);
       } catch (refreshError) {
-        // If refresh fails, user needs to log in again
-        console.error('Token refresh failed:', refreshError);
-        
-        // Process queued requests with error
+        // Refresh failed - clear auth state
         processQueue(refreshError, null);
-        
-        // Clear auth state
         setAuthToken(null);
+        
         if (authContextSetToken) {
           authContextSetToken(null, null);
         }

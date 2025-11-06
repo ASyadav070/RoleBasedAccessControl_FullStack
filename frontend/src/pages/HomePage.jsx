@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import PostItem from '../components/PostItem';
 import { Plus } from 'lucide-react';
@@ -23,7 +23,7 @@ const HomePage = () => {
   const fetchPosts = async () => {
     try {
       setIsLoading(true);
-      const response = await axios.get('/api/posts');
+      const response = await api.get('/api/posts');
       setPosts(response.data);
       setError('');
     } catch (err) {
@@ -38,7 +38,7 @@ const HomePage = () => {
     setIsCreating(true);
 
     try {
-      const response = await axios.post('/api/posts', newPost);
+      const response = await api.post('/api/posts', newPost);
       setPosts([response.data, ...posts]);
       setNewPost({ title: '', content: '' });
       setShowCreateForm(false);

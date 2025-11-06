@@ -1,7 +1,7 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/userModel');
 
-// Permission Matrix based on PRD Section 5
+// Permission Matrix based on RBAC requirements
 const PERMISSIONS = {
   Admin: [
     'posts:read',
@@ -34,6 +34,11 @@ const protect = async (req, res, next) => {
       // Get token from header
       token = req.headers.authorization.split(' ')[1];
 
+      // Validate JWT_SECRET exists
+      if (!process.env.JWT_SECRET) {
+        throw new Error('JWT_SECRET is not configured');
+      }
+
       // Verify token
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
@@ -41,27 +46,51 @@ const protect = async (req, res, next) => {
       req.user = await User.findById(decoded.userId).select('-passwordHash');
 
       if (!req.user) {
-        return res.status(401).json({ message: 'Not authorized, user not found' });
+        return res.status(401).json({ 
+          message: 'Not authorized, user not found' 
+        });
       }
 
       next();
     } catch (error) {
-      console.error(error);
-      return res.status(401).json({ message: 'Not authorized, token failed' });
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('Auth middleware error:', error.message);
+      }
+      
+      // Provide specific error messages
+      if (error.name === 'JsonWebTokenError') {
+        return res.status(401).json({ 
+          message: 'Not authorized, invalid token' 
+        });
+      }
+      
+      if (error.name === 'TokenExpiredError') {
+        return res.status(401).json({ 
+          message: 'Not authorized, token expired' 
+        });
+      }
+      
+      return res.status(401).json({ 
+        message: 'Not authorized, token failed' 
+      });
     }
   }
 
   if (!token) {
-    return res.status(401).json({ message: 'Not authorized, no token' });
+    return res.status(401).json({ 
+      message: 'Not authorized, no token provided' 
+    });
   }
 };
 
 // Middleware factory to authorize based on permissions
 const authorize = (...requiredPermissions) => {
   return (req, res, next) => {
-    // Access denied by default (F-RBAC-02)
+    // Deny access if user is not authenticated
     if (!req.user) {
-      return res.status(401).json({ message: 'Not authorized' });
+      return res.status(401).json({ 
+        message: 'Not authorized' 
+      });
     }
 
     const userRole = req.user.role;
@@ -75,6 +104,8 @@ const authorize = (...requiredPermissions) => {
     if (!hasPermission) {
       return res.status(403).json({
         message: 'Forbidden: You do not have permission to perform this action',
+        requiredPermissions,
+        userRole,
       });
     }
 

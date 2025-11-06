@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../services/api';
 import { Users } from 'lucide-react';
 
 const AdminPage = () => {
@@ -14,7 +14,7 @@ const AdminPage = () => {
   const fetchUsers = async () => {
     try {
       setIsLoading(true);
-      const response = await axios.get('/api/users');
+      const response = await api.get('/api/users');
       setUsers(response.data);
       setError('');
     } catch (err) {

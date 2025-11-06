@@ -8,23 +8,34 @@ const loginUser = async (req, res) => {
   try {
     const { username, password } = req.body;
 
-    // Check if username and password are provided
+    // Validate input
     if (!username || !password) {
-      return res.status(400).json({ message: 'Please provide username and password' });
+      return res.status(400).json({ 
+        message: 'Please provide both username and password' 
+      });
     }
 
     // Find user by username
     const user = await User.findOne({ username });
 
     if (!user) {
-      return res.status(401).json({ message: 'Invalid credentials' });
+      return res.status(401).json({ 
+        message: 'Invalid credentials' 
+      });
     }
 
     // Verify password
     const isPasswordValid = await user.matchPassword(password);
 
     if (!isPasswordValid) {
-      return res.status(401).json({ message: 'Invalid credentials' });
+      return res.status(401).json({ 
+        message: 'Invalid credentials' 
+      });
+    }
+
+    // Validate JWT_SECRET exists
+    if (!process.env.JWT_SECRET) {
+      throw new Error('JWT_SECRET is not configured');
     }
 
     // Generate JWT token
@@ -42,7 +53,15 @@ const loginUser = async (req, res) => {
       token,
     });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    // Log error details in development
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('Login error:', error);
+    }
+    
+    res.status(500).json({ 
+      message: 'Server error during login',
+      ...(process.env.NODE_ENV !== 'production' && { error: error.message })
+    });
   }
 };
 
@@ -51,13 +70,26 @@ const loginUser = async (req, res) => {
 // @access  Private
 const getMe = async (req, res) => {
   try {
+    if (!req.user) {
+      return res.status(401).json({ 
+        message: 'User not authenticated' 
+      });
+    }
+
     res.json({
       _id: req.user._id,
       username: req.user.username,
       role: req.user.role,
     });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('Get user error:', error);
+    }
+    
+    res.status(500).json({ 
+      message: 'Server error fetching user data',
+      ...(process.env.NODE_ENV !== 'production' && { error: error.message })
+    });
   }
 };
 

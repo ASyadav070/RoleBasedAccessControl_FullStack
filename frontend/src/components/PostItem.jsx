@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import api from '../services/api';
 import { usePermissions } from '../context/AuthContext';
 import { Edit2, Trash2, Save, X } from 'lucide-react';
 
@@ -20,8 +20,10 @@ const PostItem = ({ post, onUpdate, onDelete }) => {
     setError('');
 
     try {
-      const response = await axios.put(`/api/posts/${post._id}`, editedPost);
-      onUpdate(response.data);
+      const response = await api.put(`/api/posts/${post._id}`, editedPost);
+      // Backend returns { post: updatedPost }, extract the post
+      const updatedPost = response.data.post || response.data;
+      onUpdate(updatedPost);
       setIsEditing(false);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to update post');
@@ -39,7 +41,7 @@ const PostItem = ({ post, onUpdate, onDelete }) => {
     setError('');
 
     try {
-      await axios.delete(`/api/posts/${post._id}`);
+      await api.delete(`/api/posts/${post._id}`);
       onDelete(post._id);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to delete post');

@@ -5,10 +5,20 @@ const Post = require('../models/postModel');
 // @access  Private (posts:read)
 const getPosts = async (req, res) => {
   try {
-    const posts = await Post.find().populate('author', 'username').sort({ createdAt: -1 });
+    const posts = await Post.find()
+      .populate('author', 'username')
+      .sort({ createdAt: -1 });
+    
     res.json(posts);
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('Get posts error:', error);
+    }
+    
+    res.status(500).json({ 
+      message: 'Server error fetching posts',
+      ...(process.env.NODE_ENV !== 'production' && { error: error.message })
+    });
   }
 };
 
@@ -19,21 +29,38 @@ const createPost = async (req, res) => {
   try {
     const { title, content } = req.body;
 
+    // Validate input
     if (!title || !content) {
-      return res.status(400).json({ message: 'Please provide title and content' });
+      return res.status(400).json({ 
+        message: 'Please provide both title and content' 
+      });
+    }
+
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({ 
+        message: 'User authentication required' 
+      });
     }
 
     const post = await Post.create({
-      title,
-      content,
+      title: title.trim(),
+      content: content.trim(),
       author: req.user._id,
     });
 
-    const populatedPost = await Post.findById(post._id).populate('author', 'username');
+    const populatedPost = await Post.findById(post._id)
+      .populate('author', 'username');
 
     res.status(201).json(populatedPost);
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('Create post error:', error);
+    }
+    
+    res.status(500).json({ 
+      message: 'Server error creating post',
+      ...(process.env.NODE_ENV !== 'production' && { error: error.message })
+    });
   }
 };
 
@@ -44,42 +71,59 @@ const updatePost = async (req, res) => {
   try {
     const { title, content } = req.body;
 
+    // Validate input
+    if (!title && !content) {
+      return res.status(400).json({ 
+        message: 'Please provide title or content to update' 
+      });
+    }
+
     const post = await Post.findById(req.params.id);
 
     if (!post) {
-      return res.status(404).json({ message: 'Post not found' });
+      return res.status(404).json({ 
+        message: 'Post not found' 
+      });
     }
 
-    // Crucial RBAC Logic (F-RBAC-03)
+    // RBAC Logic: Check permissions
     const isAdmin = req.user.role === 'Admin';
     const isOwner = post.author.toString() === req.user._id.toString();
     const isEditor = req.user.role === 'Editor';
 
     // Admin can update any post
-    if (isAdmin) {
-      // Allow update
-    }
     // Editor can only update their own posts
-    else if (isEditor && isOwner) {
-      // Allow update
-    }
-    // Otherwise, deny access
-    else {
+    if (!isAdmin && !(isEditor && isOwner)) {
       return res.status(403).json({
         message: 'Forbidden: You can only update your own posts',
       });
     }
 
     // Update post fields
-    if (title) post.title = title;
-    if (content) post.content = content;
+    if (title) post.title = title.trim();
+    if (content) post.content = content.trim();
 
     const updatedPost = await post.save();
-    const populatedPost = await Post.findById(updatedPost._id).populate('author', 'username');
+    const populatedPost = await Post.findById(updatedPost._id)
+      .populate('author', 'username');
 
     res.status(200).json({ post: populatedPost });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('Update post error:', error);
+    }
+    
+    // Handle invalid ObjectId
+    if (error.name === 'CastError') {
+      return res.status(400).json({ 
+        message: 'Invalid post ID format' 
+      });
+    }
+    
+    res.status(500).json({ 
+      message: 'Server error updating post',
+      ...(process.env.NODE_ENV !== 'production' && { error: error.message })
+    });
   }
 };
 
@@ -91,24 +135,19 @@ const deletePost = async (req, res) => {
     const post = await Post.findById(req.params.id);
 
     if (!post) {
-      return res.status(404).json({ message: 'Post not found' });
+      return res.status(404).json({ 
+        message: 'Post not found' 
+      });
     }
 
-    // Crucial RBAC Logic (F-RBAC-03)
+    // RBAC Logic: Check permissions
     const isAdmin = req.user.role === 'Admin';
     const isOwner = post.author.toString() === req.user._id.toString();
     const isEditor = req.user.role === 'Editor';
 
     // Admin can delete any post
-    if (isAdmin) {
-      // Allow delete
-    }
     // Editor can only delete their own posts
-    else if (isEditor && isOwner) {
-      // Allow delete
-    }
-    // Otherwise, deny access
-    else {
+    if (!isAdmin && !(isEditor && isOwner)) {
       return res.status(403).json({
         message: 'Forbidden: You can only delete your own posts',
       });
@@ -116,9 +155,26 @@ const deletePost = async (req, res) => {
 
     await Post.deleteOne({ _id: req.params.id });
 
-    res.json({ message: 'Post deleted successfully' });
+    res.json({ 
+      message: 'Post deleted successfully',
+      deletedId: req.params.id 
+    });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('Delete post error:', error);
+    }
+    
+    // Handle invalid ObjectId
+    if (error.name === 'CastError') {
+      return res.status(400).json({ 
+        message: 'Invalid post ID format' 
+      });
+    }
+    
+    res.status(500).json({ 
+      message: 'Server error deleting post',
+      ...(process.env.NODE_ENV !== 'production' && { error: error.message })
+    });
   }
 };
 

@@ -31,3 +31,11 @@ coverage/
 # Build files
 dist/
 build/
+
+# Exclude documentation files (except README.md)
+REFACTOR_REPORT.md
+DEPLOYMENT_GUIDE.md
+ENV_VARIABLES_QUICK_REF.md
+DELIVERABLES_SUMMARY.md
+SETUP_GUIDE.md
+test.txt
