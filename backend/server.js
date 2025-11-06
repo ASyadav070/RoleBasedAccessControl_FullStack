@@ -15,7 +15,15 @@ connectDB();
 const app = express();
 
 // Middleware
-app.use(cors());
+app.use(
+  cors({
+    origin:
+      process.env.NODE_ENV === 'production'
+        ? process.env.FRONTEND_URL || 'https://role-based-access-control-fawn-iota.vercel.app/'
+        : 'http://localhost:3000',
+    credentials: true,
+  })
+);
 app.use(express.json());
 
 // Placeholder route
